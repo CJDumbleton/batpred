@@ -6254,19 +6254,21 @@ class PredBat(hass.Hass):
         else:
             return None
 
-    def get_cloud_factor(self, minutes_now, pv_data, pv_data10):
+    def get_cloud_factor(self, minutes_now, pv_data, pv_data10, pv_data90):
         """
         Work out approximated cloud factor
         """
         pv_total = 0
         pv_total10 = 0
+        pv_total90 = 0
         for minute in range(self.forecast_minutes):
             pv_total += pv_data.get(minute + minutes_now, 0.0)
             pv_total10 += pv_data10.get(minute + minutes_now, 0.0)
+            pv_total90 += pv_data90.get(minute + minutes_now, 0.0)
 
         pv_factor = None
-        if pv_total > 0 and (pv_total > pv_total10):
-            pv_diff = pv_total - pv_total10
+        if pv_total > 0 and (pv_total90 > pv_total10):
+            pv_diff = pv_total90 - pv_total10
             pv_factor = self.dp2(pv_diff / pv_total) / 2.0
             pv_factor = min(pv_factor, 1.0)
 
@@ -11991,10 +11993,21 @@ class PredBat(hass.Hass):
                 scale=self.pv_scaling,
                 spreading=30,
             )
+            pv_forecast_minute90 = self.minute_data(
+                pv_forecast_data,
+                self.forecast_days + 1,
+                self.midnight_utc,
+                "pv_estimate90",
+                "period_start",
+                backwards=False,
+                divide_by=divide_by,
+                scale=self.pv_scaling,
+                spreading=30,
+            )
         else:
             self.log("Warn: No solar data has been configured.")
 
-        return pv_forecast_minute, pv_forecast_minute10
+        return pv_forecast_minute, pv_forecast_minute10, pv_forecast_minute90
 
     def balance_inverters(self):
         """
@@ -12480,7 +12493,7 @@ class PredBat(hass.Hass):
         self.log("Best discharge window {}".format(self.window_as_text(self.discharge_window_best, self.discharge_limits_best)))
 
         # Created optimised step data
-        self.metric_cloud_coverage = self.get_cloud_factor(self.minutes_now, self.pv_forecast_minute, self.pv_forecast_minute10)
+        self.metric_cloud_coverage = self.get_cloud_factor(self.minutes_now, self.pv_forecast_minute, self.pv_forecast_minute10, self.pv_forecast_minute90)
         self.metric_load_divergence = self.get_load_divergence(self.minutes_now, self.load_minutes)
         load_minutes_step = self.step_data_history(
             self.load_minutes,
@@ -13340,6 +13353,7 @@ class PredBat(hass.Hass):
         self.load_forecast = {}
         self.pv_forecast_minute = {}
         self.pv_forecast_minute10 = {}
+        self.pv_forecast_minute90 = {}
         self.load_scaling_dynamic = {}
         self.carbon_intensity = {}
         self.carbon_history = {}
@@ -13724,7 +13738,7 @@ class PredBat(hass.Hass):
             self.cost_today_sofar, self.carbon_today_sofar = self.today_cost(self.import_today, self.export_today)
 
         # Fetch PV forecast if enabled, today must be enabled, other days are optional
-        self.pv_forecast_minute, self.pv_forecast_minute10 = self.fetch_pv_forecast()
+        self.pv_forecast_minute, self.pv_forecast_minute10, self.pv_forecast_minute90 = self.fetch_pv_forecast()
 
         # Apply modal filter to historical data
         if self.load_minutes and not self.load_forecast_only:
