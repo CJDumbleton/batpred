@@ -2005,6 +2005,7 @@ class PredBat(hass.Hass):
 
         # Simple divergence model keeps the same total but brings PV/Load up and down every 5 minutes
         if cloud_factor and cloud_factor > 0:
+            self.log("Divergence model pv cloud factor {}".format(cloud_factor))
             for minute in range(0, self.forecast_minutes, step):
                 cloud_on = int((minute + self.minutes_now) / 5) % 2
                 if cloud_on > 0:
